@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Tracker</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:720px;margin:30px auto;padding:0 16px;background:#f4f6f8;color:#222}
+  h1{text-align:center}
+  section{background:#fff;padding:16px;margin:16px 0;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  input,button{padding:8px;margin:4px 0;font-size:14px}
+  button{background:#2563eb;color:#fff;border:0;border-radius:4px;cursor:pointer}
+  table{width:100%;border-collapse:collapse}
+  th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}
+  .low{color:#c62828;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>Attendance Tracker</h1>
+
+<section>
+  <h2>1. Add student</h2>
+  <input id="sid" placeholder="Student ID">
+  <input id="sname" placeholder="Name">
+  <button onclick="addStudent()">Add</button>
+</section>
+
+<section>
+  <h2>2. Mark attendance</h2>
+  <div id="mark"></div>
+  <button onclick="saveAttendance()">Save today's attendance</button>
+</section>
+
+<section>
+  <h2>3. Report</h2>
+  <table id="report"></table>
+</section>
+
+<section>
+  <h2>4. Defaulters (below 75%)</h2>
+  <div id="def"></div>
+</section>
+
+<script>
+const load = k => JSON.parse(localStorage.getItem(k) || "[]");
+const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const esc = t => String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function addStudent() {
+  const id = document.getElementById("sid").value.trim();
+  const name = document.getElementById("sname").value.trim();
+  if (!id || !name) { alert("Enter ID and name"); return; }
+  const students = load("students");
+  if (students.some(s => s.id === id)) { alert("ID already exists"); return; }
+  students.push({ id, name });
+  save("students", students);
+  document.getElementById("sid").value = "";
+  document.getElementById("sname").value = "";
+  render();
+}
+
+function saveAttendance() {
+  const students = load("students");
+  if (!students.length) { alert("Add students first"); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  const records = load("records");
+  students.forEach((s, i) => {
+    const v = document.querySelector('input[name="st_' + i + '"]:checked').value;
+    records.push({ date: today, id: s.id, status: v });
+  });
+  save("records", records);
+  alert("Attendance saved");
+  render();
+}
+
+function stats() {
+  const records = load("records");
+  return load("students").map(s => {
+    const r = records.filter(x => x.id === s.id);
+    const present = r.filter(x => x.status === "P").length;
+    const pct = r.length ? Math.round(present * 1000 / r.length) / 10 : 0;
+    return { ...s, total: r.length, present, pct };
+  });
+}
+
+function render() {
+  const students = load("students");
+  document.getElementById("mark").innerHTML = students.length
+    ? students.map((s, i) =>
+        "<div>" + esc(s.id) + " " + esc(s.name) + ": " +
+        '<label><input type="radio" name="st_' + i + '" value="P" checked> Present</label> ' +
+        '<label><input type="radio" name="st_' + i + '" value="A"> Absent</label></div>'
+      ).join("")
+    : "No students yet.";
+
+  const st = stats();
+  document.getElementById("report").innerHTML =
+    "<tr><th>ID</th><th>Name</th><th>Present / Total</th><th>%</th></tr>" +
+    st.map(s => "<tr><td>" + esc(s.id) + "</td><td>" + esc(s.name) + "</td><td>" +
+      s.present + " / " + s.total + "</td><td>" + s.pct + "%</td></tr>").join("");
+
+  const low = st.filter(s => s.total > 0 && s.pct < 75);
+  document.getElementById("def").innerHTML = low.length
+    ? low.map(s => '<div class="low">' + esc(s.id) + " " + esc(s.name) + ": " + s.pct + "%</div>").join("")
+    : "No defaulters.";
+}
+
+render();
+</script>
+</body>
+</html>
